@@ -86,7 +86,7 @@ public class Main {
         Thread hook = new Thread(new Runnable() {
             @Override
             public void run() {
-                System.out.println("Releasing resources...");
+                System.out.println("releasing resources...");
                 try {
                     threadPool.shutdown();
                     System.out.println("released successfully");
@@ -100,6 +100,6 @@ public class Main {
 
     private static String getCommand(Scanner consoleReader) throws IOException {
         System.out.print("command> ");
-        return consoleReader.nextLine();
+        return consoleReader.nextLine().trim().replaceAll("\\s+", " ");
     }
 }
