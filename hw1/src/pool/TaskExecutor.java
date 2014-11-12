@@ -59,6 +59,7 @@ public class TaskExecutor implements Runnable {
                 if (!isHot) {
                     long currentTime = System.currentTimeMillis();
                     if (exitTimeoutExceeded(startTime, currentTime)) {
+                        threadEventsHandler.threadExitsOnTimeout(ID);
                         return null;
                     }
                     exitTimeoutLeft = EXIT_TIMEOUT - (currentTime - startTime);

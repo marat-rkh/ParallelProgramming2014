@@ -135,6 +135,11 @@ public class MyCachedThreadPool {
                 executor.makeHot();
             }
         }
+
+        @Override
+        public void threadExitsOnTimeout(long executorId) {
+            workersMap.remove(executorId);
+        }
     }
 
     private void startNewExecutorThread(boolean isHot) {

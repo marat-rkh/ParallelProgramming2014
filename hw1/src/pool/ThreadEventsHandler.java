@@ -7,4 +7,5 @@ package pool;
 public interface ThreadEventsHandler {
     public void threadEntersTask(long taskId, long executorId);
     public void threadFinishedTask(Task finishedTask);
+    public void threadExitsOnTimeout(long executorId);
 }
