@@ -1,6 +1,6 @@
-hw1/.idea/
-hw1/*.iml
-hw1/out/
+.idea/
+*.iml
+out/
 
 ## File-based project format
 #*.ipr
