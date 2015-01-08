@@ -1,9 +1,5 @@
 package app;
 
-import app.lists.BlockingList;
-import app.lists.LockFreeList;
-import app.lists.ThreadSafeList;
-
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -47,6 +43,7 @@ public class Main {
         protected final ThreadSafeList list;
         protected final int operationsNum;
         protected final Random gen = new Random();
+        protected final int MAX_KEY_VALUE = 1000;
 
         public Task(ThreadSafeList list, int operationsNum) {
             this.list = list;
@@ -62,7 +59,7 @@ public class Main {
         @Override
         public void run() {
             for (int i = 0; i < operationsNum; i++) {
-                list.contains(gen.nextInt(Integer.MAX_VALUE));
+                list.contains(gen.nextInt(MAX_KEY_VALUE));
             }
         }
     }
@@ -76,9 +73,9 @@ public class Main {
         public void run() {
             for(int i = 0; i < operationsNum; i++) {
                 if (gen.nextBoolean()) {
-                    list.insert(gen.nextInt(Integer.MAX_VALUE));
+                    list.insert(gen.nextInt(MAX_KEY_VALUE));
                 } else {
-                    list.erase(gen.nextInt(Integer.MAX_VALUE));
+                    list.erase(gen.nextInt(MAX_KEY_VALUE));
                 }
             }
         }

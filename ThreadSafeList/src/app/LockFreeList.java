@@ -1,6 +1,4 @@
-package app.lists;
-
-import app.lists.utils.Pair;
+package app;
 
 import java.util.concurrent.atomic.AtomicMarkableReference;
 
@@ -86,7 +84,12 @@ public class LockFreeList implements ThreadSafeList {
                         continue retry;
                     }
                     curr = succ;
-                    succ = curr.next.get(markHolder);
+                    if(curr == tail) {
+                        succ = null;
+                        markHolder[0] = false;
+                    } else {
+                        succ = curr.next.get(markHolder);
+                    }
                 }
                 if(curr.key >= key) {
                     return new Pair<Node>(pred, curr);

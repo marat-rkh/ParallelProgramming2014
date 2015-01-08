@@ -1,4 +1,4 @@
-package app.lists.utils;
+package app;
 
 public class Pair<T> {
     public T fst;

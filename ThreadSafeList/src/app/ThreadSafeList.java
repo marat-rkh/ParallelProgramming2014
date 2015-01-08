@@ -1,4 +1,4 @@
-package app.lists;
+package app;
 
 public interface ThreadSafeList {
     public boolean contains(int key);

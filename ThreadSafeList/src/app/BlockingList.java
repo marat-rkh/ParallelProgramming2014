@@ -1,6 +1,4 @@
-package app.lists;
-
-import app.lists.utils.Pair;
+package app;
 
 public class BlockingList implements ThreadSafeList {
     private Node tail = new Node(Integer.MAX_VALUE, null);
