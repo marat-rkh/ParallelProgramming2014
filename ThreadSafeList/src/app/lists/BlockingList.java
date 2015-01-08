@@ -1,47 +1,43 @@
 package app.lists;
 
-public class BlockingList {
-    private Node head = null;
+import app.lists.utils.Pair;
 
-    public synchronized Node find(int key) {
-        NodesPair pair = upperBound(key);
-        if(pair.node != null && pair.node.key == key) {
-            return pair.node;
-        }
-        return null;
+public class BlockingList implements ThreadSafeList {
+    private Node tail = new Node(Integer.MAX_VALUE, null);
+    private Node head = new Node(Integer.MIN_VALUE, tail);
+
+    public synchronized boolean contains(int key) {
+        Pair<Node> bounds = getBounds(key);
+        return bounds.snd.key == key;
     }
 
     public synchronized boolean insert(int key) {
-        NodesPair pair = upperBound(key);
-        if(pair.node != null && pair.node.key == key) {
+        Pair<Node> bounds = getBounds(key);
+        Node lower = bounds.fst;
+        Node upper = bounds.snd;
+        if(upper.key == key) {
             return false;
         }
-        if(pair.prev == null) {
-            head = new Node(key, head);
-        } else {
-            pair.prev.next = new Node(key, pair.node);
-        }
+        lower.next = new Node(key, upper);
         return true;
     }
 
     public synchronized boolean erase(int key) {
-        NodesPair pair = upperBound(key);
-        if(pair.node == null || pair.node.key != key) {
+        Pair<Node> bounds = getBounds(key);
+        Node lower = bounds.fst;
+        Node upper = bounds.snd;
+        if(upper.key != key) {
             return false;
         }
-        if(pair.prev == null) {
-            head = pair.node.next;
-        } else {
-            pair.prev.next = pair.node.next;
-        }
+        lower.next = upper.next;
         return true;
     }
 
     @Override
     public synchronized String toString() {
         StringBuilder builder = new StringBuilder("[");
-        Node curr = head;
-        while (curr != null) {
+        Node curr = head.next;
+        while (curr != tail) {
             builder.append(curr.key).append(' ');
             curr = curr.next;
         }
@@ -49,14 +45,14 @@ public class BlockingList {
         return builder.toString();
     }
 
-    private NodesPair upperBound(int key) {
-        Node prev = null;
-        Node curr = head;
-        while (curr != null && key > curr.key) {
+    private Pair<Node> getBounds(int key) {
+        Node prev = head;
+        Node curr = prev.next;
+        while (curr != tail && curr.key < key) {
             prev = curr;
             curr = curr.next;
         }
-        return new NodesPair(prev, curr);
+        return new Pair<Node>(prev, curr);
     }
 
     private class Node {
@@ -66,16 +62,6 @@ public class BlockingList {
         public Node(int key, Node next) {
             this.key = key;
             this.next = next;
-        }
-    }
-
-    private class NodesPair {
-        public Node node;
-        public Node prev;
-
-        public NodesPair(Node prev, Node node) {
-            this.node = node;
-            this.prev = prev;
         }
     }
 }
