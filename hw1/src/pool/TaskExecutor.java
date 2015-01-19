@@ -37,10 +37,9 @@ public class TaskExecutor implements Runnable {
         try {
             while (!shutdownIsCalled) {
                 Task task = waitTask();
-                if(task == null || shutdownIsCalled) {
+                if(task == null) {
                     return;
                 }
-                threadEventsHandler.threadEntersTask(task.getID(), ID);
                 task.run();
                 threadEventsHandler.threadFinishedTask(task);
             }
@@ -68,7 +67,12 @@ public class TaskExecutor implements Runnable {
                     tasksProvider.wait();
                 }
             }
-            return tasksProvider.getTask();
+            Task task = tasksProvider.getTask();
+            if(task == null || shutdownIsCalled) {
+                return null;
+            }
+            threadEventsHandler.threadEntersTask(task.getID(), ID);
+            return task;
         }
     }
 

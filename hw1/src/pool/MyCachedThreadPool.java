@@ -18,7 +18,7 @@ public class MyCachedThreadPool {
     private final ThreadEventsHandler eventsHandler = new ThreadPoolEventsHandler();
 
     private final int HOT_THREADS_NUMBER;
-    private final AtomicInteger currentHotThreadsNumber;
+    private final AtomicInteger readyThreadsNumber = new AtomicInteger(0);
     private final int THREADS_TIMEOUT;
 
     private long lastTaskId = 0;
@@ -30,7 +30,6 @@ public class MyCachedThreadPool {
 
     public MyCachedThreadPool(int hotThreadsNumber, int timeoutSeconds, Logger logger) {
         this.HOT_THREADS_NUMBER = hotThreadsNumber;
-        this.currentHotThreadsNumber = new AtomicInteger(HOT_THREADS_NUMBER);
         this.THREADS_TIMEOUT = timeoutSeconds;
         this.logger = logger;
         for(int i = 0; i < HOT_THREADS_NUMBER; i++) {
@@ -45,15 +44,18 @@ public class MyCachedThreadPool {
      * @return created task's ID
      * @throws Exception if this method is called after closing thread pool
      */
-    public long addTask(int lengthInSeconds) throws Exception {
+    public synchronized long addTask(int lengthInSeconds) throws Exception {
         if(isClosed) {
             throw new Exception("thread pool is closed");
         }
         synchronized (tasksProvider) {
             tasksProvider.setNextTask(lastTaskId, lengthInSeconds);
-            if(currentHotThreadsNumber.get() != 0) {
+            logger.debug("ready threads num on add task: " + readyThreadsNumber.get());
+            if(readyThreadsNumber.get() != 0) {
+                logger.debug("existing thread is notified about task " + lastTaskId);
                 tasksProvider.notify();
             } else {
+                logger.debug("new thread is created for task " + lastTaskId);
                 startNewExecutorThread(/*isHot=*/false);
             }
         }
@@ -68,7 +70,7 @@ public class MyCachedThreadPool {
      * task with passed ID
      * @throws Exception if this method is called after closing thread pool
      */
-    public boolean removeTask(long taskId) throws Exception {
+    public synchronized boolean removeTask(long taskId) throws Exception {
         if(isClosed) {
             throw new Exception("thread pool is closed");
         }
@@ -86,7 +88,7 @@ public class MyCachedThreadPool {
      *
      * @throws InterruptedException if interrupted during waiting tasks to complete
      */
-    public void shutdown() throws InterruptedException {
+    public synchronized void shutdown() throws InterruptedException {
         if(!isClosed) {
             synchronized (tasksProvider) {
                 for (Map.Entry<Long, Worker> entry : workersMap.entrySet()) {
@@ -106,38 +108,31 @@ public class MyCachedThreadPool {
     private class ThreadPoolEventsHandler implements ThreadEventsHandler {
         @Override
         public void threadEntersTask(long taskId, long executorId) {
+            logger.debug("executor " + executorId + " enters task " + taskId);
             tasksMap.put(taskId, executorId);
             TaskExecutor executor = workersMap.get(executorId).getTaskExecutor();
-            if(executor.isHot()) {
-                int oldVal = currentHotThreadsNumber.get();
-                while (!currentHotThreadsNumber.compareAndSet(oldVal, oldVal - 1)) {
-                    oldVal = currentHotThreadsNumber.get();
-                }
-                executor.makeCold();
-            }
+            readyThreadsNumber.decrementAndGet();
+            executor.makeCold();
         }
 
         @Override
         public synchronized void threadFinishedTask(Task finishedTask) {
+            logger.debug("task " + finishedTask.getID() + " is finished");
             if(finishedTask.isDone()) {
                 logIfNeeded("\ntask " + finishedTask.getID() + " is done\n");
             }
             Long workerId = tasksMap.remove(finishedTask.getID());
             TaskExecutor executor = workersMap.get(workerId).getTaskExecutor();
-            if (currentHotThreadsNumber.get() == HOT_THREADS_NUMBER) {
-                executor.shutdown();
-                workersMap.remove(workerId);
-            } else {
-                int oldVal = currentHotThreadsNumber.get();
-                while (!currentHotThreadsNumber.compareAndSet(oldVal, oldVal + 1)) {
-                    oldVal = currentHotThreadsNumber.get();
-                }
+            int oldVal = readyThreadsNumber.getAndIncrement();
+            if (oldVal < HOT_THREADS_NUMBER) {
                 executor.makeHot();
             }
         }
 
         @Override
         public void threadExitsOnTimeout(long executorId) {
+            logger.debug("executor " + executorId + " exits on timeout");
+            readyThreadsNumber.decrementAndGet();
             workersMap.remove(executorId);
         }
     }
@@ -147,6 +142,7 @@ public class MyCachedThreadPool {
                                        THREADS_TIMEOUT, tasksProvider, eventsHandler);
         Thread newThread = new Thread(newExecutor);
         workersMap.put(lastExecutorId, new Worker(newThread, newExecutor));
+        readyThreadsNumber.incrementAndGet();
         newThread.start();
         ++lastExecutorId;
     }
