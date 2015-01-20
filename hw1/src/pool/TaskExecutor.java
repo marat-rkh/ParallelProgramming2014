@@ -42,6 +42,8 @@ public class TaskExecutor implements Runnable {
                 }
                 task.run();
                 threadEventsHandler.threadFinishedTask(task);
+                // this is to clear the interrupted status
+                Thread.interrupted();
             }
         } catch (InterruptedException e) {
             // exit

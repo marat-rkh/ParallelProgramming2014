@@ -13,8 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class MyCachedThreadPool {
     private final TasksProvider tasksProvider = new TasksProvider();
-    private Map<Long, Worker> workersMap = new ConcurrentHashMap<>();
-    private Map<Long, Long> tasksMap = new ConcurrentHashMap<>();
+    private final Map<Long, Worker> workersMap = new ConcurrentHashMap<>();
+    private final Map<Long, Long> tasksMap = new ConcurrentHashMap<>();
     private final ThreadEventsHandler eventsHandler = new ThreadPoolEventsHandler();
 
     private final int HOT_THREADS_NUMBER;
@@ -50,12 +50,9 @@ public class MyCachedThreadPool {
         }
         synchronized (tasksProvider) {
             tasksProvider.setNextTask(lastTaskId, lengthInSeconds);
-            logger.debug("ready threads num on add task: " + readyThreadsNumber.get());
             if(readyThreadsNumber.get() != 0) {
-                logger.debug("existing thread is notified about task " + lastTaskId);
                 tasksProvider.notify();
             } else {
-                logger.debug("new thread is created for task " + lastTaskId);
                 startNewExecutorThread(/*isHot=*/false);
             }
         }
@@ -74,13 +71,15 @@ public class MyCachedThreadPool {
         if(isClosed) {
             throw new Exception("thread pool is closed");
         }
-        Long workerId = tasksMap.get(taskId);
-        if(workerId != null) {
-            Worker worker = workersMap.get(workerId);
-            worker.getThread().interrupt();
-            return true;
+        synchronized (workersMap) {
+            Long workerId = tasksMap.get(taskId);
+            if (workerId != null) {
+                Worker worker = workersMap.get(workerId);
+                worker.getThread().interrupt();
+                return true;
+            }
+            return false;
         }
-        return false;
     }
 
     /**
@@ -90,16 +89,18 @@ public class MyCachedThreadPool {
      */
     public synchronized void shutdown() throws InterruptedException {
         if(!isClosed) {
-            synchronized (tasksProvider) {
-                for (Map.Entry<Long, Worker> entry : workersMap.entrySet()) {
-                    entry.getValue().getTaskExecutor().shutdown();
+            synchronized (workersMap) {
+                synchronized (tasksProvider) {
+                    for (Map.Entry<Long, Worker> entry : workersMap.entrySet()) {
+                        entry.getValue().getTaskExecutor().shutdown();
+                    }
+                    for (Map.Entry<Long, Worker> entry : workersMap.entrySet()) {
+                        tasksProvider.notify();
+                    }
                 }
                 for (Map.Entry<Long, Worker> entry : workersMap.entrySet()) {
-                    tasksProvider.notify();
+                    entry.getValue().getThread().join();
                 }
-            }
-            for (Map.Entry<Long, Worker> entry : workersMap.entrySet()) {
-                entry.getValue().getThread().join();
             }
             isClosed = true;
         }
@@ -108,7 +109,6 @@ public class MyCachedThreadPool {
     private class ThreadPoolEventsHandler implements ThreadEventsHandler {
         @Override
         public void threadEntersTask(long taskId, long executorId) {
-            logger.debug("executor " + executorId + " enters task " + taskId);
             tasksMap.put(taskId, executorId);
             TaskExecutor executor = workersMap.get(executorId).getTaskExecutor();
             readyThreadsNumber.decrementAndGet();
@@ -117,7 +117,6 @@ public class MyCachedThreadPool {
 
         @Override
         public synchronized void threadFinishedTask(Task finishedTask) {
-            logger.debug("task " + finishedTask.getID() + " is finished");
             if(finishedTask.isDone()) {
                 logIfNeeded("\ntask " + finishedTask.getID() + " is done\n");
             }
@@ -131,9 +130,10 @@ public class MyCachedThreadPool {
 
         @Override
         public void threadExitsOnTimeout(long executorId) {
-            logger.debug("executor " + executorId + " exits on timeout");
-            readyThreadsNumber.decrementAndGet();
-            workersMap.remove(executorId);
+            synchronized (workersMap) {
+                readyThreadsNumber.decrementAndGet();
+                workersMap.remove(executorId);
+            }
         }
     }
 
